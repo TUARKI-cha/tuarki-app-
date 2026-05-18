@@ -2,7 +2,48 @@
 
 import Link from "next/link";
 
+import { useState } from "react";
+
+import ConsultCard from "@/app/components/ConsultCard";
+
 export default function DashboardPage() {
+   
+  const [consultations, setConsultations] = useState([
+    {
+      title: "Grieta en muro",
+      status: "En revisión",
+      time: "Hace 2 horas",
+    },
+  
+    {
+      title: "Diseño de cocina",
+      status: "Asignado",
+      time: "Hoy",
+    },
+  
+    {
+      title: "Revisión estructural",
+      status: "Completado",
+      time: "Ayer",
+    },
+  ]);
+  const [newConsultation, setNewConsultation] = useState("");
+
+  const addConsultation = () => {
+
+    if (!newConsultation.trim()) return;
+  
+    const newItem = {
+      title: newConsultation,
+      status: "Nueva",
+      time: "Ahora",
+    };
+  
+    setConsultations([newItem, ...consultations]);
+  
+    setNewConsultation("");
+  };
+
     return (
       <main className="min-h-screen bg-[#F5F5F3] flex">
   
@@ -55,7 +96,7 @@ export default function DashboardPage() {
           <div className="bg-[#163E31] p-5 rounded-3xl">
   
             <p className="font-semibold">
-              Juan Pérez
+              Liz Longoria
             </p>
   
             <p className="text-sm text-gray-400 mt-1">
@@ -79,7 +120,7 @@ export default function DashboardPage() {
               </p>
   
               <h2 className="text-5xl font-bold text-[#0D3B2E]">
-                Hola, Juan 👋
+                Hola, Liz 👋
               </h2>
   
             </div>
@@ -135,7 +176,61 @@ export default function DashboardPage() {
             </div>
   
           </div>
-  
+          {/* QUICK ADD */}
+<div className="bg-white rounded-[30px] p-6 mb-10 shadow-sm">
+
+<div className="flex gap-4">
+
+  <input
+    type="text"
+    placeholder="Nueva consulta rápida..."
+    value={newConsultation}
+    onChange={(e) => setNewConsultation(e.target.value)}
+    className="flex-1 px-5 py-4 rounded-2xl border border-[#DADADA] focus:outline-none focus:border-[#1E7A5A]"
+  />
+
+  <button
+    onClick={addConsultation}
+    className="bg-[#7ED957] px-8 rounded-2xl font-bold text-[#0D3B2E] hover:scale-105 transition-all duration-300"
+  >
+    Agregar
+  </button>
+
+</div>
+
+</div>
+  {/* CONSULTAS */}
+<div className="mb-10">
+
+<div className="flex items-center justify-between mb-8">
+
+  <h3 className="text-3xl font-bold text-[#0D3B2E]">
+    Tus consultas
+  </h3>
+
+  <button className="text-[#1E7A5A] font-semibold">
+    Ver todas
+  </button>
+
+</div>
+
+<div className="grid grid-cols-3 gap-6">
+
+{consultations.map((consultation, index) => (
+
+<ConsultCard
+  key={index}
+  title={consultation.title}
+  status={consultation.status}
+  time={consultation.time}
+/>
+
+))}
+
+</div>
+
+</div>
+
           {/* ACTIVITY */}
           <div className="bg-white rounded-[35px] p-8">
   
