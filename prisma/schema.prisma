@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Consultation {
+  id             String             @id @default(cuid())
+  title          String
+  description    String
+  category       String
+  status         String             @default("active")
+  createdAt      DateTime           @default(now())
+  duration       Int                @default(0)
+  specialistName String?
+
+  messages       Message[]
+  files          ConsultationFile[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  consultationId String
+  sender         String
+  text           String
+  createdAt      DateTime     @default(now())
+
+  consultation   Consultation @relation(fields: [consultationId], references: [id])
+}
+
+model ConsultationFile {
+  id             String       @id @default(cuid())
+  consultationId String
+  name           String
+  url            String
+  createdAt      DateTime     @default(now())
+
+  consultation   Consultation @relation(fields: [consultationId], references: [id])
+}

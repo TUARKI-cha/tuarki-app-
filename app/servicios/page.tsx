@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function ServiciosPage() {
 
@@ -194,13 +195,22 @@ export default function ServiciosPage() {
                   </div>
 
                   <button
-                    onClick={() => {
+                    onClick={async () => {
 
                       localStorage.setItem(
                         "selectedService",
                         JSON.stringify(service)
                       );
-
+                      
+                      if (consultationId) {
+                        await supabase
+                          .from("consultations")
+                          .update({
+                            service: service.title,
+                          })
+                          .eq("id", consultationId);
+                      }
+                      
                       router.push(
                         `/pago?id=${consultationId}`
                       );

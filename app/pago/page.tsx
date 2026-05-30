@@ -5,6 +5,8 @@ import {
   useSearchParams,
 } from "next/navigation";
 
+import { supabase } from "@/lib/supabase";
+
 import {
   useEffect,
   useState,
@@ -20,6 +22,9 @@ export default function PagoPage() {
   const consultationId =
     searchParams.get("id");
 
+ const [consultation, setConsultation] =
+    useState<any>(null);
+
   const [service, setService] =
     useState<any>(null);
 
@@ -33,6 +38,10 @@ export default function PagoPage() {
         "selectedService"
       );
 
+      if (consultationId) {
+        loadConsultation();
+      }
+
     if (savedService) {
 
       setService(
@@ -41,7 +50,19 @@ export default function PagoPage() {
 
     }
 
-  }, []);
+  }, [consultationId]);
+
+  const loadConsultation = async () => {
+    const { data } = await supabase
+      .from("consultations")
+      .select("*")
+      .eq("id", consultationId)
+      .single();
+  
+    if (data) {
+      setConsultation(data);
+    }
+  };
 
   return (
 
@@ -253,48 +274,27 @@ export default function PagoPage() {
 
                   {/* BUTTON */}
                   <button
-                    onClick={() => {
+                    onClick={async () => {
 
                       if (!consultationId) return;
 
                       setLoading(true);
 
+                      if (consultationId) {
+                        await supabase
+                          .from("consultations")
+                          .update({
+                            payment_status: "paid",
+                          })
+                          .eq("id", consultationId);
+                      }
                       setTimeout(() => {
 
-                        if (
-                          service?.title ===
-                          "Videollamada"
-                        ) {
+                        console.log(service);
 
                           router.push(
-                            `/videollamada/${consultationId}`
+                            `/asignando-especialista?id=${consultationId}`
                           );
-
-                        } else if (
-                          service?.title ===
-                          "Revisión de planos"
-                        ) {
-
-                          router.push(
-                            `/revision-planos/${consultationId}`
-                          );
-
-                        } else if (
-                          service?.title ===
-                          "Revisión de presupuesto"
-                        ) {
-
-                          router.push(
-                            `/revision-presupuesto/${consultationId}`
-                          );
-
-                        } else {
-
-                          router.push(
-                            `/chat/${consultationId}`
-                          );
-
-                        }
 
                       }, 1200);
 
@@ -347,7 +347,15 @@ export default function PagoPage() {
                       </div>
 
                     </div>
+                    <div className="mb-8">
+  <p className="text-gray-400 text-sm mb-2">
+    Tu consulta
+  </p>
 
+  <p className="text-white leading-relaxed">
+    {consultation?.description || "Consulta arquitectónica"}
+  </p>
+</div>
                     {/* INFO */}
                     <div className="space-y-6 border-b border-white/10 pb-8 mb-8">
 

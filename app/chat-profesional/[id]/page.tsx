@@ -46,7 +46,7 @@ export default function ChatPage() {
   const messagesEndRef =
     useRef<HTMLDivElement | null>(null);
 
-  const uploadedFiles = messages.filter((msg) =>
+    const uploadedFiles = messages.filter((msg) =>
       msg.text?.includes("https://")
     );
 
@@ -204,7 +204,7 @@ export default function ChatPage() {
       .insert([
         {
           consultation_id: consultationId,
-          sender: "user",
+          sender: "specialist",
           text: finalMessage,
         },
       ]);
@@ -292,8 +292,8 @@ export default function ChatPage() {
               </div>
 
               <h3 className="font-black mb-5">
-  Chat con especialista
-</h3>
+              Conversación con cliente
+              </h3>
 
               <div className="bg-[#F3FFEE] border-l-4 border-[#57B33E] rounded-3xl p-5 flex items-center gap-4">
                 <div className="w-14 h-14 rounded-full bg-[#0D3B2E] text-white flex items-center justify-center">
@@ -302,7 +302,7 @@ export default function ChatPage() {
 
                 <div className="flex-1">
                   <p className="font-black text-[#111]">
-                  {professional?.name || "Especialista asignado"}
+                  {consultation?.name || "Cliente TuArki"}
                   </p>
 
                   <p className="text-sm text-[#57B33E] font-semibold">
@@ -343,7 +343,7 @@ export default function ChatPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h1 className="text-2xl font-black text-[#111]">
-                    {professional?.name || "Especialista asignado"}
+                    {consultation?.name || "Cliente TuArki"}
                     </h1>
 
                     <span className="text-[#57B33E]">
@@ -558,7 +558,7 @@ export default function ChatPage() {
                 <div className="flex-1 bg-white border border-[#E5E7EB] rounded-full px-5 py-3 flex items-center gap-3 shadow-sm">
                   <input
                     type="text"
-                    placeholder="Escribe tu mensaje..."
+                    placeholder="Responder al cliente..."
                     value={message}
                     onChange={(e) =>
                       setMessage(e.target.value)
@@ -672,18 +672,41 @@ export default function ChatPage() {
               </h3>
 
               <div className="space-y-4 text-sm text-[#374151]">
-                <button className="flex items-center gap-3">
-                  📄 Compartir documento
-                </button>
 
-                <button className="flex items-center gap-3">
-                  ❔ Solicitar más información
-                </button>
+  <button
+    onClick={() =>
+      setMessage(
+        "¿Podrías compartir más fotografías o videos para analizar mejor el problema?"
+      )
+    }
+    className="flex items-center gap-3 hover:text-[#57B33E]"
+  >
+    ❔ Solicitar más información
+  </button>
 
-                <button className="flex items-center gap-3">
-                  ✅ Marcar como resuelto
-                </button>
-              </div>
+  <button
+    onClick={() =>
+      setMessage(
+        "Te compartiré un documento con recomendaciones y observaciones."
+      )
+    }
+    className="flex items-center gap-3 hover:text-[#57B33E]"
+  >
+    📄 Compartir documento
+  </button>
+
+  <button
+    onClick={() =>
+      setMessage(
+        "Considero que la consulta ha sido resuelta satisfactoriamente."
+      )
+    }
+    className="flex items-center gap-3 hover:text-[#57B33E]"
+  >
+    ✅ Marcar como resuelto
+  </button>
+
+</div>
             </div>
 
             <div className="bg-[#F3FFEE] rounded-[30px] p-7 border border-[#DDF5D3]">

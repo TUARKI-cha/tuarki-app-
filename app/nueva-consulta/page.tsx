@@ -100,14 +100,17 @@ export default function NuevaConsultaPage() {
           {
             title: selectedCategory,
             description,
-            service: selectedCategory,
-            status: "Nueva",
-
+            category: selectedCategory,
+            service: "Chat",
+            status: "pending",
+            phone_verified: false,
+            assigned_professional_id: null,
+          
             client_id: clientData.id,
             name: clientData.name,
             phone: clientData.phone,
             city: clientData.city,
-          },
+          }
         ])
         .select()
         .single();
@@ -124,8 +127,13 @@ export default function NuevaConsultaPage() {
 
       }
 
+      localStorage.setItem(
+        "pendingConsultationId",
+        data.id
+      );
+      
       router.push(
-        `/servicios?id=${data.id}`
+        `/verificacion?id=${data.id}`
       );
 
     } catch (err) {
