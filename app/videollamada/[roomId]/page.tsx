@@ -47,6 +47,12 @@ export default function VideoCallPage() {
   const [secondsLeft, setSecondsLeft] = useState(15 * 60);
   const [callEnded, setCallEnded] = useState(false);
 
+  const [consultation, setConsultation] =
+  useState<any>(null);
+
+  const [professional, setProfessional] =
+  useState<any>(null);
+
   /* TIMER FORMAT */
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
@@ -206,6 +212,41 @@ export default function VideoCallPage() {
 
     return () => clearInterval(interval);
   }, [callEnded]);
+
+const loadConsultation = async () => {
+  const { data, error } = await supabase
+    .from("consultations")
+    .select("*")
+    .eq("id", consultationId)
+    .single();
+
+  if (error) {
+    console.log(error);
+    return;
+  }
+
+  setConsultation(data);
+
+  if (data?.assigned_professional_id) {
+    const { data: professionalData } =
+      await supabase
+        .from("professionals")
+        .select("*")
+        .eq(
+          "id",
+          data.assigned_professional_id
+        )
+        .maybeSingle();
+
+    setProfessional(professionalData);
+  }
+};
+
+useEffect(() => {
+  if (consultationId) {
+    loadConsultation();
+  }
+}, [consultationId]);
 
   /* SEND MESSAGE */
   function sendMessage() {
@@ -392,7 +433,7 @@ export default function VideoCallPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-[48px] leading-none font-bold text-[#111]">
-                    Arq. Elizabeth Longoria
+                    {professional?.name || "Especialista asignado"}
                   </h1>
 
                   <span className="text-[#57B33E] text-xl">
@@ -401,12 +442,12 @@ export default function VideoCallPage() {
                 </div>
 
                 <p className="text-[#6B7280] text-lg mt-1">
-                  Arquitecta especializada en construcción
+                  {professional?.specialty || "Especialista en construcción"}
                 </p>
 
                 <div className="flex items-center gap-5 mt-2 text-[15px]">
                   <span className="text-[#F5B301] font-medium">
-                    ⭐ 4.9 (128 valoraciones)
+                    ⭐ {professional?.rating || 5}
                   </span>
 
                   <span className="text-[#57B33E] font-medium">
@@ -489,7 +530,7 @@ export default function VideoCallPage() {
                 {/* SPECIALIST TAG */}
                 <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl text-white flex items-center gap-3">
                   <span className="font-semibold">
-                    Ana Torres
+                    {professional?.name || "Especialista"}
                   </span>
 
                   <span className="text-[#57B33E]">
@@ -678,7 +719,7 @@ export default function VideoCallPage() {
                   </p>
 
                   <p className="text-[#111111] font-medium leading-relaxed">
-                    Humedad en pared del baño después de la lluvia.
+                  {consultation?.description || "Consulta arquitectónica"}
                   </p>
                 </div>
 
@@ -688,7 +729,7 @@ export default function VideoCallPage() {
                   </p>
 
                   <p className="text-[#111111] font-medium">
-                    Construcción
+                  {consultation?.service || consultation?.category || "Construcción"}
                   </p>
                 </div>
 
@@ -698,7 +739,9 @@ export default function VideoCallPage() {
                   </p>
 
                   <p className="text-[#111111] font-medium">
-                    20 may. 2024 - 10:15 AM
+                  {consultation?.created_at
+                    ? new Date(consultation.created_at).toLocaleString("es-MX")
+                    : "Fecha no disponible"}
                   </p>
                 </div>
               </div>
