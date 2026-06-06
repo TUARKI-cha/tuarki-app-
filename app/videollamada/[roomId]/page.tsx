@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import {
+  useRouter,
+  useParams,
+  useSearchParams,
+} from "next/navigation";
 
 import io from "socket.io-client";
 import Peer from "simple-peer";
@@ -24,8 +28,11 @@ export default function VideoCallPage() {
   /* ROUTER */
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const roomId = params.roomId as string;
   const consultationId = roomId;
+  const role =
+  searchParams.get("role") || "client";
 
   /* REFS */
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -176,7 +183,15 @@ export default function VideoCallPage() {
         });
 
         socketRef.current.on("answer", (answer: any) => {
-          peerRef.current?.signal(answer);
+          try {
+            if (!peerRef.current || peerRef.current.destroyed) {
+              return;
+            }
+        
+            peerRef.current.signal(answer);
+          } catch (error) {
+            console.log("Answer ignorada porque el peer ya fue destruido");
+          }
         });
 
         socketRef.current.on("receive-message", (message: any) => {
@@ -249,7 +264,7 @@ useEffect(() => {
 }, [consultationId]);
 
   /* SEND MESSAGE */
-  function sendMessage() {
+  async function sendMessage() {
     if (!messageInput.trim()) return;
 
     const message = {
@@ -257,10 +272,22 @@ useEffect(() => {
       text: messageInput,
     };
 
-    socketRef.current?.emit("send-message", message);
+    socketRef.current?.emit("send-message", {
+      roomId,
+      message,
+    });
 
     setMessages((prev) => [...prev, message]);
     setMessageInput("");
+    await supabase
+  .from("messages")
+  .insert([
+    {
+      consultation_id: Number(consultationId),
+      sender: "user",
+      text: message.text,
+    },
+  ]);
   }
 
   /* TOGGLE MICROPHONE */
@@ -348,21 +375,51 @@ useEffect(() => {
   }
 
   /* FILE SELECT */
-  function handleFileSelect(
+  async function handleFileSelect(
     event: React.ChangeEvent<HTMLInputElement>
   ) {
     const file = event.target.files?.[0];
 
-    if (!file) return;
+if (!file) return;
 
-    const fileMessage = {
-      sender: "Tú",
-      text: `📎 Archivo enviado: ${file.name}`,
-    };
+const fileName = `${Date.now()}-${file.name}`;
 
-    socketRef.current?.emit("send-message", fileMessage);
+const { error } = await supabase.storage
+  .from("chat-files")
+  .upload(fileName, file);
 
-    setMessages((prev) => [...prev, fileMessage]);
+if (error) {
+  console.log(error);
+  return;
+}
+
+const { data: publicUrlData } = supabase.storage
+  .from("chat-files")
+  .getPublicUrl(fileName);
+
+const fileUrl = publicUrlData.publicUrl;
+
+const fileMessage = {
+  sender: "Tú",
+  text: `📎 Archivo enviado: ${fileUrl}`,
+};
+
+socketRef.current?.emit("send-message", {
+  roomId,
+  message: fileMessage,
+});
+
+setMessages((prev) => [...prev, fileMessage]);
+
+await supabase
+  .from("messages")
+  .insert([
+    {
+      consultation_id: Number(consultationId),
+      sender: "user",
+      text: fileMessage.text,
+    },
+  ]);
   }
 
   /* END CALL */
@@ -384,7 +441,9 @@ useEffect(() => {
       ?.getTracks()
       .forEach((track) => track.stop());
   
-    peerRef.current?.destroy();
+      if (peerRef.current && !peerRef.current.destroyed) {
+        peerRef.current.destroy();
+      }
   
     socketRef.current?.disconnect();
   
@@ -396,7 +455,12 @@ useEffect(() => {
     })
     .eq("id", consultationId);
   
-  router.push(`/finalizar-consulta/${consultationId}`);
+    if (role === "professional") {
+      router.push("/dashboard");
+      return;
+    }
+    
+    router.push(`/finalizar-consulta/${consultationId}`);
   
   }
 

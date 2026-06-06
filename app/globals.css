@@ -34,3 +34,26 @@ button {
   cursor: pointer;
   border: none;
 }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: white;
+  }
+
+  section {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  section:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+}

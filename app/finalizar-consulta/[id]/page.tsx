@@ -30,7 +30,19 @@ export default function FinalizarConsultaPage() {
     const consultationId =
   Number(params.id);
 
+const [showFollowUpForm, setShowFollowUpForm] = useState(false);
+const [followUpDate, setFollowUpDate] = useState("");
+const [followUpTime, setFollowUpTime] = useState("");
+const [followUpNotes, setFollowUpNotes] = useState("");
+const [savingFollowUp, setSavingFollowUp] = useState(false);
+
 const [consultation, setConsultation] =
+  useState<any>(null);
+
+const [messages, setMessages] =
+  useState<any[]>([]);
+
+const [professional, setProfessional] =
   useState<any>(null);
 
   const [ratingGeneral, setRatingGeneral] =
@@ -66,9 +78,39 @@ useEffect(() => {
 
     setConsultation(data);
 
-  }
+    if (data?.assigned_professional_id) {
+      const { data: professionalData } =
+        await supabase
+          .from("professionals")
+          .select("*")
+          .eq(
+            "id",
+            data.assigned_professional_id
+          )
+          .maybeSingle();
+    
+      setProfessional(professionalData);
+    }
 
+  }
+  async function loadMessages() {
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("consultation_id", consultationId)
+      .order("created_at", {
+        ascending: true,
+      });
+  
+    if (error) {
+      console.log(error);
+      return;
+    }
+  
+    setMessages(data || []);
+  }
   loadConsultation();
+  loadMessages();
 
 }, [consultationId]);
 
@@ -148,6 +190,52 @@ if (existingRating) {
     setSavingRating(false);
   }
 }
+
+    async function saveFollowUp() {
+  if (!consultation || !professional) {
+    alert("Falta información de la consulta o del profesional");
+    return;
+  }
+
+  if (!followUpDate || !followUpTime) {
+    alert("Selecciona fecha y hora para el seguimiento");
+    return;
+  }
+
+  setSavingFollowUp(true);
+
+  const { error } = await supabase.from("follow_ups").insert({
+    consultation_id: consultation.id,
+    professional_id: professional.id,
+    professional_name: professional.name,
+    client_name: consultation.name || "Cliente sin nombre",
+    client_phone: consultation.phone || null,
+    service: consultation.service || null,
+    scheduled_date: followUpDate,
+    scheduled_time: followUpTime,
+    notes: followUpNotes,
+    status: "scheduled",
+  });
+
+  setSavingFollowUp(false);
+
+  if (error) {
+    console.log(error);
+    alert("No se pudo agendar el seguimiento");
+    return;
+  }
+
+  alert("Seguimiento agendado correctamente");
+  setShowFollowUpForm(false);
+  setFollowUpDate("");
+  setFollowUpTime("");
+  setFollowUpNotes("");
+}
+
+const uploadedFiles = messages.filter((msg) =>
+  msg.text?.includes("https://")
+);
+
     return (
     <main className="min-h-screen bg-[#F8FAF7] px-8 py-8 text-[#0D3B2E]">
       {/* HEADER */}
@@ -164,33 +252,12 @@ if (existingRating) {
             </p>
           </div>
         </div>
-
-        <nav className="hidden lg:flex items-center gap-10 text-sm font-semibold text-[#111]">
-          <span>Cómo funciona</span>
-          <span>Servicios</span>
-          <span>Especialistas</span>
-          <span>Sobre nosotros</span>
-          <span>Blog</span>
-        </nav>
-
-        <div className="flex items-center gap-4">
-          <button className="hidden md:block bg-white border border-[#E5E7EB] px-6 py-3 rounded-full font-semibold shadow-sm">
-            ¿Eres profesional?
-          </button>
-
-          <Link
-            href="/login"
-            className="bg-[#0D3B2E] text-white px-7 py-3 rounded-full font-semibold shadow-lg"
-          >
-            Inicia sesión
-          </Link>
-        </div>
       </header>
 
       <div className="max-w-[1500px] mx-auto">
         {/* BACK */}
         <Link
-          href="/dashboard"
+          href="/"
           className="inline-flex items-center gap-2 text-sm text-[#374151] mb-8 hover:text-[#57B33E]"
         >
           ← Volver al inicio
@@ -290,7 +357,11 @@ if (existingRating) {
                       Fecha
                     </p>
                     <p className="font-bold text-[#6B7280]">
-                      20 may. 2024 · 10:28 AM
+                    {consultation?.created_at
+  ? new Date(
+      consultation.created_at
+    ).toLocaleString("es-MX")
+  : "Fecha no disponible"}
                     </p>
                   </div>
                 </div>
@@ -416,13 +487,13 @@ if (existingRating) {
               </div>
 
               <div className="bg-[#F8FFF4] rounded-3xl p-6 space-y-4">
-                {[
-                  "Sellar la junta exterior de la ventana con sellador antihumedad.",
-                  "Impermeabilizar el marco y revisar pendientes para escurrimiento.",
-                  "Revisar y limpiar filtración en la parte inferior de la ventana.",
-                  "Aplicar sellador en muro interior si la humedad persiste.",
-                  "Monitorear por 2 semanas y tomar fotos de seguimiento.",
-                ].map((item, index) => (
+              {[
+                "Revisar las observaciones compartidas por el especialista.",
+               "Guardar evidencia fotográfica del avance o problema.",
+               "Evitar ejecutar trabajos de riesgo sin supervisión profesional.",
+               "Solicitar seguimiento si el problema continúa o cambia.",
+               "Conservar este resumen como referencia de la consulta.",
+               ].map((item, index) => (
                   <div
                     key={item}
                     className="flex items-start gap-3"
@@ -443,14 +514,14 @@ if (existingRating) {
               <div className="mt-6 bg-[#F3FFEE] rounded-[34px] border border-[#DDF5D3] p-9 flex flex-col md:flex-row items-center justify-between gap-8 shadow-sm">
               <div className="flex items-center gap-4">
                 <img
-                  src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400"
+                  src={professional?.avatar_url || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400"}
                   className="w-16 h-16 rounded-full object-cover border-4 border-white"
                   alt="Especialista"
                 />
 
                 <div>
                   <h3 className="text-xl font-black text-[#374151]">
-                    ¿Quieres continuar con Arq. Elizabeth Longoria?
+                  ¿Quieres continuar con {professional?.name || "este especialista"}?
                   </h3>
 
                   <p className="text-[#6B7280]">
@@ -479,26 +550,28 @@ if (existingRating) {
 
               <div className="flex items-center gap-5">
                 <img
-                  src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400"
+                 src={professional?.avatar_url || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400"}
                   className="w-24 h-24 rounded-full object-cover"
                   alt="Especialista"
                 />
 
                 <div>
                   <h4 className="text-xl font-black text-[#111]">
-                    Arq. Elizabeth Longoria
+                  {professional?.name || "Especialista asignado"}
                   </h4>
 
                   <p className="text-sm text-[#6B7280] mt-1">
-                    Arquitecta especializada en construcción
+                  {professional?.specialty || "Especialista en construcción"}
                   </p>
 
                   <p className="text-sm text-[#F5B301] mt-3 font-semibold">
-                    ⭐ 4.9 (128 valoraciones)
+                    ⭐ {professional?.rating || 5} 
                   </p>
 
                   <p className="text-sm text-[#57B33E] mt-2 font-semibold">
-                    ● En línea
+                  {professional?.is_online
+                  ? "● En línea"
+                  : "● No disponible"}
                   </p>
                 </div>
               </div>
@@ -542,7 +615,11 @@ if (existingRating) {
                     </p>
 
                     <p className="font-semibold text-[#6B7280]">
-                      20 may. 2024
+                    {consultation?.created_at
+                     ? new Date(
+                      consultation.created_at
+                      ).toLocaleString("es-MX")
+                      : "Fecha no disponible"}
                     </p>
                   </div>
                 </div>
@@ -550,19 +627,94 @@ if (existingRating) {
             </div>
 
             {/* FILES */}
-            <div className="bg-white rounded-[32px] border border-[#E5E7EB] shadow-sm p-7">
-              <h3 className="text-xl font-black text-[#374151] mb-5">
-                Archivos enviados
-              </h3>
+            <div className="grid grid-cols-3 gap-3">
+  {uploadedFiles.length === 0 && (
+    <p className="text-sm text-[#6B7280]">
+      No se enviaron archivos durante esta consulta.
+    </p>
+  )}
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="h-24 rounded-2xl bg-[#E5E7EB]" />
-                <div className="h-24 rounded-2xl bg-[#E5E7EB]" />
-                <div className="h-24 rounded-2xl bg-[#374151]/70 text-white flex items-center justify-center text-xl font-bold">
-                  +2
-                </div>
-              </div>
-            </div>
+{uploadedFiles.slice(0, 4).map((file, index) => {
+  const fileUrl =
+    file.text
+      .split(" ")
+      .find((part: string) =>
+        part.includes("https://")
+      ) || "";
+
+  const cleanUrl =
+    fileUrl.split("?")[0].toLowerCase();
+
+  const isImage =
+    cleanUrl.endsWith(".jpg") ||
+    cleanUrl.endsWith(".jpeg") ||
+    cleanUrl.endsWith(".png") ||
+    cleanUrl.endsWith(".webp");
+
+  const isPdf =
+    cleanUrl.endsWith(".pdf");
+
+  const isDoc =
+    cleanUrl.endsWith(".doc") ||
+    cleanUrl.endsWith(".docx") ||
+    cleanUrl.endsWith(".xls") ||
+    cleanUrl.endsWith(".xlsx");
+
+  if (isImage) {
+    return (
+      <a
+        key={file.id || index}
+        href={fileUrl}
+        target="_blank"
+        className="block"
+      >
+        <img
+          src={fileUrl}
+          alt={`Archivo ${index + 1}`}
+          className="h-24 w-full rounded-2xl object-cover border border-[#E5E7EB] hover:scale-105 transition-all"
+        />
+      </a>
+    );
+  }
+
+  if (isPdf) {
+    return (
+      <a
+        key={file.id || index}
+        href={fileUrl}
+        target="_blank"
+        className="block bg-[#F8FAF7] border border-[#E5E7EB] rounded-2xl p-4 text-sm font-semibold text-[#374151] hover:bg-[#F3FFEE] transition-all"
+      >
+        📄 Ver PDF {index + 1}
+      </a>
+    );
+  }
+
+  if (isDoc) {
+    return (
+      <a
+        key={file.id || index}
+        href={fileUrl}
+        target="_blank"
+        className="block bg-[#F8FAF7] border border-[#E5E7EB] rounded-2xl p-4 text-sm font-semibold text-[#374151] hover:bg-[#F3FFEE] transition-all"
+      >
+        📎 Descargar documento {index + 1}
+      </a>
+    );
+  }
+
+  return (
+    <a
+      key={file.id || index}
+      href={fileUrl}
+      target="_blank"
+      className="block bg-[#F8FAF7] border border-[#E5E7EB] rounded-2xl p-4 text-sm font-semibold text-[#374151] hover:bg-[#F3FFEE] transition-all"
+    >
+      📎 Archivo enviado {index + 1}
+    </a>
+  );
+})}
+</div>
 
             {/* NEXT STEPS */}
             <div className="bg-white rounded-[32px] border border-[#E5E7EB] shadow-sm p-7">
@@ -620,11 +772,6 @@ if (existingRating) {
                     text: "Programa una nueva consulta.",
                   },
                   {
-                    icon: UserPlus,
-                    title: "Guardar especialista",
-                    text: "Agrégala a favoritos.",
-                  },
-                  {
                     icon: Share2,
                     title: "Compartir consulta",
                     text: "Comparte el resumen.",
@@ -639,9 +786,54 @@ if (existingRating) {
 
                   return (
                     <button
-                      key={item.title}
-                      className="bg-[#F8FAF7] rounded-2xl border border-[#E5E7EB] p-4 text-left hover:shadow-md transition-all flex items-start gap-4"
-                    >
+  key={item.title}
+  onClick={() => {
+    if (item.title === "Descargar resumen") {
+      window.open(`/resumen/${consultationId}`, "_blank");
+    }
+  
+    if (item.title === "Agendar seguimiento") {
+      setShowFollowUpForm(true);
+    }
+  
+    if (item.title === "Compartir consulta") {
+      const shareText = `
+  TuArki - Resumen de consulta
+  
+  Consulta #${consultation?.id}
+  
+  Especialista: ${professional?.name}
+  
+  Servicio: ${consultation?.service}
+  
+  Puedes revisar el resumen aquí:
+  ${window.location.origin}/resumen/${consultationId}
+      `;
+  
+      const shareUrl = `https://wa.me/?text=${encodeURIComponent(
+        shareText
+      )}`;
+  
+      window.open(shareUrl, "_blank");
+    }
+
+    if (item.title === "Chat de soporte") {
+      const supportText = `
+    Hola TuArki, necesito ayuda con mi consulta #${consultation?.id}.
+    
+    Nombre: ${consultation?.name}
+    Servicio: ${consultation?.service}
+      `;
+    
+      window.open(
+        `https://wa.me/5214621309850?text=${encodeURIComponent(supportText)}`,
+        "_blank"
+      );
+    }
+  }}
+
+  className="bg-[#F8FAF7] rounded-2xl border border-[#E5E7EB] p-4 text-left hover:shadow-md transition-all flex items-start gap-4"
+>
                       <Icon
                         className="text-[#57B33E] shrink-0"
                         size={26}
@@ -663,6 +855,83 @@ if (existingRating) {
             </div>
           </aside>
         </section>
+        
+     {showFollowUpForm && (
+  <div className="bg-white rounded-[32px] border border-[#E5E7EB] shadow-sm p-7">
+    <h3 className="text-xl font-black text-[#374151] mb-5">
+      Agendar seguimiento
+    </h3>
+
+    <div className="grid md:grid-cols-2 gap-4">
+      <div>
+        <label className="block text-sm font-semibold mb-2">
+          Fecha
+        </label>
+
+        <input
+          type="date"
+          value={followUpDate}
+          onChange={(e) =>
+            setFollowUpDate(e.target.value)
+          }
+          className="w-full border border-[#E5E7EB] rounded-2xl p-3"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-semibold mb-2">
+          Hora
+        </label>
+
+        <input
+          type="time"
+          value={followUpTime}
+          onChange={(e) =>
+            setFollowUpTime(e.target.value)
+          }
+          className="w-full border border-[#E5E7EB] rounded-2xl p-3"
+        />
+      </div>
+    </div>
+
+    <div className="mt-4">
+      <label className="block text-sm font-semibold mb-2">
+        Notas
+      </label>
+
+      <textarea
+        value={followUpNotes}
+        onChange={(e) =>
+          setFollowUpNotes(e.target.value)
+        }
+        rows={4}
+        className="w-full border border-[#E5E7EB] rounded-2xl p-3"
+        placeholder="Observaciones para el seguimiento..."
+      />
+    </div>
+
+    <div className="flex gap-3 mt-6">
+      <button
+        onClick={saveFollowUp}
+        disabled={savingFollowUp}
+        className="px-6 py-3 rounded-2xl bg-[#57B33E] text-white font-bold"
+      >
+        {savingFollowUp
+          ? "Guardando..."
+          : "Guardar seguimiento"}
+      </button>
+
+      <button
+        onClick={() =>
+          setShowFollowUpForm(false)
+        }
+        className="px-6 py-3 rounded-2xl border border-[#E5E7EB] font-bold"
+      >
+        Cancelar
+      </button>
+    </div>
+  </div>
+)}
 
         {/* FOOTER BENEFITS */}
         <section className="mt-12 bg-white rounded-[32px] border border-[#E5E7EB] p-7 grid grid-cols-1 md:grid-cols-4 gap-6 mt-8 space-y-6">

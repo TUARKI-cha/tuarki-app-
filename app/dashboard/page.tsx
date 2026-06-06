@@ -39,10 +39,9 @@ type Consultation = {
 type Professional = {
   id: string;
   name: string;
-  specialty?: string;
-  rating?: number;
-  avatar_url?: string;
-  is_online: boolean;
+  email: string;
+  specialty: string | null;
+  rating: number | null;
 };
 
 type Rating = {
@@ -55,12 +54,22 @@ type Rating = {
   created_at?: string;
 };
 
+type FollowUp = {
+  id: string;
+  client_name: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  status: string;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
 
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [professional, setProfessional] = useState<Professional | null>(null);
   const [ratings, setRatings] = useState<Rating[]>([]);
+  const [followUps, setFollowUps] = useState<FollowUp[]>([]);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
   const [latestConsultationId, setLatestConsultationId] =
     useState<string | null>(null);
@@ -151,6 +160,40 @@ export default function DashboardPage() {
     }
 
     setProfessional(data);
+    loadFollowUps(data.id);
+    loadUnreadNotifications(data.id);
+  };
+
+  const loadFollowUps = async (professionalId: string) => {
+    const { data, error } = await supabase
+      .from("follow_ups")
+      .select("*")
+      .eq("professional_id", professionalId)
+      .eq("status", "scheduled")
+      .order("scheduled_date", { ascending: true })
+      .order("scheduled_time", { ascending: true });
+  
+    if (error) {
+      console.log(error);
+      return;
+    }
+  
+    setFollowUps(data || []);
+  };
+
+  const loadUnreadNotifications = async (professionalId: string) => {
+    const { count, error } = await supabase
+      .from("professional_notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("professional_id", professionalId)
+      .eq("is_read", false);
+  
+    if (error) {
+      console.log(error);
+      return;
+    }
+  
+    setUnreadMessagesCount(count || 0);
   };
 
   const toggleAvailability = async () => {
@@ -214,7 +257,7 @@ export default function DashboardPage() {
     const service = item.service?.toLowerCase() || "";
 
     if (service.includes("video")) {
-      router.push(`/videollamada/${item.id}`);
+      router.push(`/videollamada/${item.id}?role=professional`);
       return;
     }
 
@@ -228,7 +271,7 @@ export default function DashboardPage() {
       return;
     }
 
-    router.push(`/chat/${item.id}`);
+    router.push(`/chat-profesional/${item.id}`);
   };
 
   const pendingConsultations = useMemo(
@@ -270,6 +313,69 @@ export default function DashboardPage() {
     return consultations.find((item) => item.id === id);
   };
 
+  const completedChat = completedConsultations.filter((item) =>
+    item.service?.toLowerCase().includes("chat")
+  ).length;
+  
+  const completedVideo = completedConsultations.filter((item) =>
+    item.service?.toLowerCase().includes("video")
+  ).length;
+  
+  const completedPlans = completedConsultations.filter((item) =>
+    item.service?.toLowerCase().includes("plano")
+  ).length;
+  
+  const completedBudget = completedConsultations.filter((item) =>
+    item.service?.toLowerCase().includes("presupuesto")
+  ).length;
+  
+  const estimatedEarnings =
+    completedChat * 150 +
+    completedVideo * 200 +
+    completedPlans * 200 +
+    completedBudget * 200;
+
+    const today = new Date().toISOString().split("T")[0];
+
+    const todayFollowUps = followUps.filter(
+      (item) => item.scheduled_date === today
+    );
+    
+    const nextFollowUps = followUps.filter(
+      (item) => item.scheduled_date >= today
+    );
+    
+    const dashboardNotifications = [
+      ...todayFollowUps.slice(0, 2).map((item) => ({
+        title: "Seguimiento para hoy",
+        text: `${item.client_name} tiene seguimiento a las ${item.scheduled_time}.`,
+        path: "/dashboard/agenda",
+      })),
+    
+      ...nextFollowUps
+        .filter((item) => item.scheduled_date !== today)
+        .slice(0, 2)
+        .map((item) => ({
+          title: "Seguimiento próximo",
+          text: `${item.client_name} está agendado para el ${item.scheduled_date} a las ${item.scheduled_time}.`,
+          path: "/dashboard/agenda",
+        })),
+    
+        ...assignedConsultations.slice(0, 2).map((item) => ({
+          title: "Consulta en proceso",
+          text: `${item.name || "Cliente"} tiene una consulta activa.`,
+          path: item.service?.toLowerCase().includes("video")
+            ? `/videollamada/${item.id}?role=professional`
+            : `/chat-profesional/${item.id}`,
+        })),
+    
+      ...pendingConsultations.slice(0, 2).map((item) => ({
+        title: "Nueva consulta",
+        text: `${item.name || "Cliente temporal"} solicita una asesoría.`,
+        path: "/dashboard",
+      })),
+    ].slice(0, 4);
+  
   return (
     <main className="min-h-screen bg-[#FAFAF8] flex text-[#111]">
       <aside className="w-[290px] bg-white border-r border-[#ECECEC] p-8 flex flex-col justify-between">
@@ -288,43 +394,44 @@ export default function DashboardPage() {
           </div>
 
           <nav className="space-y-3">
-            {[
-              { icon: LayoutDashboard, label: "Dashboard", count: null },
-              { icon: FileText, label: "Consultas", count: pendingConsultations.length },
-              { icon: CalendarDays, label: "Agenda", count: null },
-              { icon: MessageCircle, label: "Mensajes", count: 2 },
-              { icon: Users, label: "Mis clientes", count: null },
-              { icon: Clock3, label: "Historial", count: null },
-              { icon: DollarSign, label: "Ganancias", count: null },
-              { icon: ChartNoAxesColumn, label: "Estadísticas", count: null },
-              { icon: FileText, label: "Recursos", count: null },
-              { icon: User, label: "Mi perfil", count: null },
-              { icon: Settings, label: "Configuración", count: null },
-            ].map((item, index) => {
-              const Icon = item.icon;
+          {[
+     { icon: LayoutDashboard, label: "YO-ARKI", count: null, path: "/dashboard" },
+  { icon: CalendarDays, label: "Agenda", count: null, path: "/dashboard/agenda" },
+  { icon: MessageCircle, label: "Mensajes", count: unreadMessagesCount, path: "/dashboard/mensajes" },
+  { icon: Clock3, label: "Historial", count: null, path: "/dashboard/historial" },
+  { icon: DollarSign, label: "Ganancias", count: null, path: "/dashboard/ganancias" },
+  { icon: ChartNoAxesColumn, label: "Estadísticas", count: null, path: "/dashboard/estadisticas" },
+  { icon: FileText, label: "Recursos", count: null, path: "/dashboard/recursos" },
+  { icon: User, label: "Mi perfil", count: null, path: "/dashboard/perfil" },
+  { icon: Settings, label: "Configuración", count: null, path: "/dashboard/configuracion" },
+].map((item) => {
+  const Icon = item.icon;
 
-              return (
-                <button
-                  key={item.label}
-                  className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all font-semibold ${
-                    index === 0
-                      ? "bg-[#0B3B2E] text-white shadow-lg"
-                      : "hover:bg-[#F4F4F2] text-[#374151]"
-                  }`}
-                >
-                  <span className="flex items-center gap-4">
-                    <Icon size={20} />
-                    {item.label}
-                  </span>
 
-                  {!!item.count && (
-                    <span className="w-7 h-7 rounded-full bg-[#57B33E] text-white text-sm flex items-center justify-center font-bold">
-                      {item.count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+
+  return (
+    <button
+      key={item.label}
+      onClick={() => router.push(item.path)}
+      className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all font-semibold ${
+        item.path === "/dashboard"
+          ? "bg-[#0B3B2E] text-white shadow-lg"
+          : "hover:bg-[#F4F4F2] text-[#374151]"
+      }`}
+    >
+      <span className="flex items-center gap-4">
+        <Icon size={20} />
+        {item.label}
+      </span>
+
+      {!!item.count && (
+        <span className="w-7 h-7 rounded-full bg-[#57B33E] text-white text-sm flex items-center justify-center font-bold">
+          {item.count}
+        </span>
+      )}
+    </button>
+  );
+})}
           </nav>
         </div>
 
@@ -404,13 +511,13 @@ export default function DashboardPage() {
                 },
                 {
                   title: "Tiempo de respuesta",
-                  value: "1.8 min",
-                  sub: "Promedio hoy",
+                  value: "--",
+                  sub: "Sin datos suficientes",
                   icon: Clock3,
                 },
                 {
                   title: "Calificación promedio",
-                  value: `${averageRating} ⭐`,
+                  value: `${professional?.rating?.toFixed(1) || "0.0"} ⭐`,
                   sub: `Basado en ${ratings.length} reseñas`,
                   icon: Star,
                 },
@@ -656,68 +763,94 @@ export default function DashboardPage() {
             </section>
 
             <section className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              <div className="bg-white rounded-[32px] border border-[#E5E7EB] p-7">
-                <h3 className="text-xl font-black mb-6">
-                  Consultas agendadas
-                </h3>
+            <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB]">
+  <h3 className="text-xl font-black text-[#0B3B2E]">
+    Consultas agendadas
+  </h3>
 
-                {[
-                  ["Ana González", "21 may. 2024", "11:00 AM"],
-                  ["Diego Morales", "21 may. 2024", "03:30 PM"],
-                  ["Laura Sánchez", "22 may. 2024", "10:00 AM"],
-                ].map((item) => (
-                  <div
-                    key={item[0]}
-                    className="flex items-center justify-between py-4 border-b border-[#F1F1F1]"
-                  >
-                    <p className="font-semibold">{item[0]}</p>
-                    <p className="text-sm text-[#6B7280]">{item[1]}</p>
-                    <p className="text-sm font-bold">{item[2]}</p>
-                  </div>
-                ))}
-              </div>
+  {followUps.length === 0 ? (
+  <>
+    <p className="text-[#6B7280] mt-3">
+      No tienes seguimientos programados por ahora.
+    </p>
 
-              <div className="bg-white rounded-[32px] border border-[#E5E7EB] p-7">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-black">Ganancias</h3>
-                  <span className="text-sm text-[#15803D] font-bold">
-                    Mes
-                  </span>
-                </div>
+    <div className="mt-6 rounded-2xl bg-[#F4F4F2] p-5 text-sm font-semibold text-[#6B7280]">
+      Sin seguimientos activos
+    </div>
+  </>
+) : (
+  <div className="mt-5 rounded-2xl bg-[#F4FAF1] border border-[#DCEFD5] p-5">
+    <p className="text-sm font-bold text-[#57B33E]">
+      Próximo seguimiento
+    </p>
 
-                <h2 className="text-5xl font-black mt-8">
-                  $8,450
-                  <span className="text-lg text-[#6B7280] ml-2">
-                    MXN
-                  </span>
-                </h2>
+    <h4 className="text-xl font-black text-[#0B3B2E] mt-1">
+      {followUps[0].client_name}
+    </h4>
 
-                <div className="h-32 mt-8 rounded-2xl bg-gradient-to-t from-[#F4FAF1] to-white border border-[#E5E7EB]" />
+    <p className="text-sm text-[#6B7280] mt-2">
+      {followUps[0].scheduled_date} · {followUps[0].scheduled_time}
+    </p>
 
-                <div className="grid grid-cols-2 gap-4 mt-6">
-                  <div>
-                    <p className="text-sm text-[#6B7280]">
-                      Consultas pagadas
-                    </p>
-                    <p className="text-2xl font-black">56</p>
-                  </div>
+    <button
+      onClick={() => router.push("/dashboard/agenda")}
+      className="mt-4 text-sm font-black text-[#0B3B2E]"
+    >
+      Ver agenda →
+    </button>
+  </div>
+)}
+</div>
 
-                  <div>
-                    <p className="text-sm text-[#6B7280]">
-                      Ticket promedio
-                    </p>
-                    <p className="text-2xl font-black">$151 MXN</p>
-                  </div>
-                </div>
-              </div>
+<div className="bg-white rounded-3xl p-6 border border-[#E5E7EB]">
+<h3 className="text-xl font-black text-[#0B3B2E]">
+  Ganancias estimadas
+</h3>
+
+<p className="text-[#6B7280] mt-3">
+  Cálculo provisional basado en consultas finalizadas.
+</p>
+
+<div className="mt-6 rounded-2xl bg-[#F4FAF1] border border-[#DCEFD5] p-5">
+  <p className="text-sm font-bold text-[#57B33E]">
+    Total estimado
+  </p>
+
+  <h4 className="text-4xl font-black text-[#0B3B2E] mt-1">
+    ${estimatedEarnings.toLocaleString("es-MX")} MXN
+  </h4>
+
+  <div className="mt-5 space-y-2 text-sm text-[#374151]">
+    <div className="flex justify-between">
+      <span>Chat</span>
+      <strong>{completedChat} × $150</strong>
+    </div>
+
+    <div className="flex justify-between">
+      <span>Videollamada</span>
+      <strong>{completedVideo} × $200</strong>
+    </div>
+
+    <div className="flex justify-between">
+      <span>Revisión de planos</span>
+      <strong>{completedPlans} × $200</strong>
+    </div>
+
+    <div className="flex justify-between">
+      <span>Presupuesto</span>
+      <strong>{completedBudget} × $200</strong>
+    </div>
+  </div>
+</div>
+</div>
             </section>
 
             <section className="bg-white rounded-[32px] border border-[#E5E7EB] p-7 grid grid-cols-4 gap-6">
               {[
-                ["Tiempo promedio", "1.8 min"],
+                ["Tiempo promedio", "Próximamente"],
                 ["Consultas completadas", completedConsultations.length.toString()],
                 ["Satisfacción clientes", ratings.length ? "98%" : "0%"],
-                ["Clientes recurrentes", "32%"],
+                ["Clientes recurrentes", "Próximamente"],
               ].map((item) => (
                 <div key={item[0]}>
                   <p className="text-sm text-[#6B7280]">{item[0]}</p>
@@ -731,34 +864,37 @@ export default function DashboardPage() {
           </div>
 
           <aside className="space-y-8">
-            <section className="bg-white rounded-[32px] border border-[#E5E7EB] p-7">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-black">Notificaciones</h3>
-                <button className="text-[#15803D] font-bold text-sm">
-                  Ver todas
-                </button>
-              </div>
+          <section className="bg-white rounded-[32px] border border-[#E5E7EB] p-7">
+  <div className="flex items-center justify-between mb-6">
+    <h3 className="text-xl font-black">Notificaciones</h3>
 
-              {pendingConsultations.slice(0, 3).map((item) => (
-                <div
-                  key={item.id}
-                  className="p-5 rounded-2xl bg-[#FAFAF8] mb-4"
-                >
-                  <p className="font-black">
-                    Nueva consulta
-                  </p>
-                  <p className="text-sm text-[#6B7280] mt-1">
-                    {item.name || "Cliente temporal"} solicita una asesoría.
-                  </p>
-                </div>
-              ))}
+    <button
+      onClick={() => router.push("/dashboard/agenda")}
+      className="text-[#15803D] font-bold text-sm"
+    >
+      Ver todas
+    </button>
+  </div>
 
-              {pendingConsultations.length === 0 && (
-                <p className="text-sm text-[#6B7280]">
-                  No hay notificaciones nuevas.
-                </p>
-              )}
-            </section>
+  {dashboardNotifications.map((item, index) => (
+    <button
+      key={`${item.title}-${index}`}
+      onClick={() => router.push(item.path)}
+      className="w-full text-left p-5 rounded-2xl bg-[#FAFAF8] mb-4 hover:bg-[#F4FAF1] transition"
+    >
+      <p className="font-black">{item.title}</p>
+      <p className="text-sm text-[#6B7280] mt-1">
+        {item.text}
+      </p>
+    </button>
+  ))}
+
+  {dashboardNotifications.length === 0 && (
+    <p className="text-sm text-[#6B7280]">
+      No hay notificaciones nuevas.
+    </p>
+  )}
+</section>
 
             <section className="bg-white rounded-[32px] border border-[#E5E7EB] p-7">
               <h3 className="text-xl font-black mb-6">
@@ -766,16 +902,36 @@ export default function DashboardPage() {
               </h3>
 
               <div className="grid grid-cols-2 gap-4">
-                {["Bloquear horario", "Mensaje de saludo", "Plantillas", "Precios"].map(
-                  (item) => (
-                    <button
-                      key={item}
-                      className="border border-[#E5E7EB] rounded-2xl p-5 text-sm font-bold hover:bg-[#F4FAF1]"
-                    >
-                      {item}
-                    </button>
-                  )
-                )}
+              {[
+  {
+    label: "Bloquear horario",
+    action: () => router.push("/dashboard/agenda"),
+  },
+  {
+    label: "Ver historial",
+    action: () => router.push("/dashboard/historial"),
+  },
+  {
+    label: "Ver perfil",
+    action: () => router.push("/dashboard/perfil"),
+  },
+  {
+    label: "Ir a soporte",
+    action: () =>
+      window.open(
+        "https://wa.me/5214621309850?text=Hola%20TuArki%2C%20necesito%20soporte%20como%20profesional.",
+        "_blank"
+      ),
+  },
+].map((item) => (
+  <button
+    key={item.label}
+    onClick={item.action}
+    className="border border-[#E5E7EB] rounded-2xl p-5 text-sm font-bold hover:bg-[#F4FAF1] transition"
+  >
+    {item.label}
+  </button>
+))}
               </div>
             </section>
 
@@ -820,25 +976,29 @@ export default function DashboardPage() {
               )}
             </section>
 
-            <section className="bg-[#F4FAF1] rounded-[32px] border border-[#DCEFD2] p-7 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-black text-[#15803D]">
-                  Tu perfil está verificado
-                </h3>
-                <p className="text-[#6B7280] mt-2">
-                  Los clientes confían en ti.
-                </p>
-              </div>
+            <section className="bg-[#F4FAF1] rounded-[24px] p-5 border border-[#DCEFD5]">
+  <div className="flex items-center gap-3">
+    <div className="w-10 h-10 rounded-full bg-[#57B33E] flex items-center justify-center text-white font-black">
+      ✓
+    </div>
 
-              <button
-  onClick={() =>
-    router.push("/dashboard/perfil")
-  }
-  className="border border-[#57B33E] text-[#15803D] px-5 py-3 rounded-2xl font-bold"
->
-  Ver perfil
-</button>
-            </section>
+    <div>
+      <h3 className="font-black text-[#0B3B2E]">
+        Profesional verificado
+      </h3>
+
+      <p className="text-sm text-[#6B7280]">
+        Perfil validado por TuArki
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-4 space-y-1 text-sm">
+    <p>✓ Identidad verificada</p>
+    <p>✓ Experiencia comprobada</p>
+    <p>✓ Perfil activo</p>
+  </div>
+</section>
           </aside>
         </div>
       </section>
